@@ -7,11 +7,23 @@
 
 
 class thread {
+private:
     int quantum;
     int id;
     int state;
 
-    void new thread(int quantum,int id);
+public:
+    thread(int quantum, int id);
+
+    void setState(int state);
+
+    int getQuantum() const;
+
+    int getId() const;
+
+    int getState() const;
+//    ~thread() = default;
+
 };
 
 
