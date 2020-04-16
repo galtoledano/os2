@@ -8,14 +8,14 @@
 #include <deque>
 #include <vector>
 #include <algorithm>
-#include <iterator>
 
 void empty(){}
 static int threads_counter = 1;
+static int total_quant = 0;
+
 std::deque<thread*> tready;
 std::vector<int> quantums_list;
 std::vector<thread*> threads(MAX_THREAD_NUM);
-
 
 
 int uthread_init(int *quantum_usecs, int size){
@@ -174,16 +174,37 @@ int uthread_resume(int tid){
     return 0;
 }
 
+/*
+ * Description: This function returns the thread ID of the calling thread.
+ * Return value: The ID of the calling thread.
+*/
 int uthread_get_tid(){
     // todo: implement
     return 0;
 }
 
+/*
+ * Description: This function returns the total number of quantums since
+ * the library was initialized, including the current quantum.
+ * Right after the call to uthread_init, the value should be 1.
+ * Each time a new quantum starts, regardless of the reason, this number
+ * should be increased by 1.
+ * Return value: The total number of quantums.
+*/
 int uthread_get_total_quantums(){
-    // todo: implement
-    return 0;
+    return total_quant;
 }
 
+/*
+ * Description: This function returns the number of quantums the thread with
+ * ID tid was in RUNNING state. On the first time a thread runs, the function
+ * should return 1. Every additional quantum that the thread starts should
+ * increase this value by 1 (so if the thread with ID tid is in RUNNING state
+ * when this function is called, include also the current quantum). If no
+ * thread with ID tid exists it is considered an error.
+ * Return value: On success, return the number of quantums of the thread with ID tid.
+ * 			     On failure, return -1.
+*/
 int uthread_get_quantums(int tid){
     // todo: implement
     return 0;
