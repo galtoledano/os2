@@ -6,14 +6,25 @@
 #define OS2_THREAD_H
 
 
+const int READY = 1;
+
+const int BLOCK = 2;
+
+const int RUN = 0;
+
 class thread {
 private:
     int quantum;
     int id;
+public:
+    void setQuantum(int quantum);
+
+private:
     int state;
+    void(* f)(void);
 
 public:
-    thread(int quantum, int id);
+    thread(int quantum, int id, void (*foo)(void));
 
     void setState(int state);
 

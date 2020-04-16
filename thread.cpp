@@ -3,9 +3,11 @@
 //
 
 #include "thread.h"
-thread::thread(int quantum, int id) : quantum(quantum), id(id)
+thread::thread(int quantum, int id, void (*foo)(void)) : quantum(quantum), id(id)
 {
-    this->state = 1;
+    //todo allloc memory
+    this->f = foo;
+    this->state = READY;
 }
 
 int thread::getQuantum() const {
@@ -22,5 +24,9 @@ int thread::getState() const {
 
 void thread::setState(int state) {
     thread::state = state;
+}
+
+void thread::setQuantum(int quantum) {
+    thread::quantum = quantum;
 }
 
