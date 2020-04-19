@@ -8,6 +8,9 @@
 #include <deque>
 #include <vector>
 #include <algorithm>
+#include <stdio.h>
+#include <signal.h>
+#include <sys/time.h>
 
 void empty(){}
 static int threads_counter = 1;
@@ -17,6 +20,33 @@ std::deque<thread*> tready;
 std::vector<int> quantums_list;
 std::vector<thread*> threads(MAX_THREAD_NUM);
 
+void round_robin(int sig){
+    if(tready.empty()){
+       // todo : handle empty ready list
+    }
+
+
+}
+
+int reset_time(int quant){
+    struct sigaction sa = {0};
+    struct itimerval timer;
+    sa.sa_handler = &round_robin;
+    if (sigaction(SIGVTALRM, &sa, nullptr) < 0) {
+        std::cerr <<  "system error: sigaction error\n";
+        return -1;
+    }
+    timer.it_value.tv_sec = 0;
+    timer.it_value.tv_usec = quant;
+    timer.it_interval.tv_sec = 0;
+    timer.it_interval.tv_usec = quant;
+    if (setitimer (ITIMER_VIRTUAL, &timer, nullptr)) {
+        std::cerr <<  "system error: setitimer error\n";
+        return -1;
+    }
+    return 0;
+
+}
 
 int uthread_init(int *quantum_usecs, int size){
     for(int i=0; i<size; ++i){
@@ -29,6 +59,7 @@ int uthread_init(int *quantum_usecs, int size){
     thread* main_thread = new thread(quantum_usecs[0], 0 , empty);
     // todo: the RR algorithm
     int threads_counter = 1;
+    reset_time(main_thread->getQuantum());
     //thread* threads_list = new thread[MAX_THREAD_NUM];
     return 0;
 }
@@ -210,6 +241,3 @@ int uthread_get_quantums(int tid){
     return 0;
 }
 
-void round_robin(){
-
-}
