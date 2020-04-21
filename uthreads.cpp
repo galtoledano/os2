@@ -34,12 +34,12 @@ void round_robin(int sig){
             current_thread->inc_calls();
             total_quant++;
             return;
-            
+
         case BLOCK:
+            // todo : more ?
+            uthread_block(current_thread->getId());
             return;
     }
-
-
 }
 
 int reset_time(int quant){
@@ -59,7 +59,6 @@ int reset_time(int quant){
         return -1;
     }
     return 0;
-
 }
 
 int uthread_init(int *quantum_usecs, int size){
@@ -224,8 +223,7 @@ int uthread_resume(int tid){
  * Return value: The ID of the calling thread.
 */
 int uthread_get_tid(){
-    // todo: implement
-    return 0;
+    return current_thread->getId();
 }
 
 /*
@@ -251,7 +249,7 @@ int uthread_get_total_quantums(){
  * 			     On failure, return -1.
 */
 int uthread_get_quantums(int tid){
-    // todo: implement
-    return 0;
+    // todo: fail ? 
+    return threads[tid]->getCall();
 }
 
