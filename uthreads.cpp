@@ -2,8 +2,7 @@
 // Created by galtoledano on 16/04/2020.
 //
 
-#include "uthreads.h"
-#include "thread.h"
+
 #include <iostream>
 #include <deque>
 #include <vector>
@@ -11,8 +10,17 @@
 #include <stdio.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <setjmp.h>
+#include <unistd.h>
+#include "uthreads.h"
+#include "thread.h"
+
+typedef unsigned long address_t;
 
 void empty(){}
+struct sigaction sa = {0}; // todo : move back to reset timer ?
+struct itimerval timer;
+sigjmp_buf env[MAX_THREAD_NUM];  // todo : good ?
 static int threads_counter = 1;
 static int total_quant = 0;
 thread* current_thread;
@@ -20,31 +28,51 @@ std::deque<thread*> tready;
 std::vector<int> quantums_list;
 std::vector<thread*> threads(MAX_THREAD_NUM);
 
+
+/* A translation is required when using an address of a variable.
+   Use this as a black box in your code. */
+address_t translate_address(address_t addr)
+{
+    address_t ret;
+    asm volatile("xor    %%gs:0x18,%0\n"
+                 "rol    $0x9,%0\n"
+    : "=g" (ret)
+    : "0" (addr));
+    return ret;
+}
+
 void round_robin(int sig){
     if(tready.empty()){
        // todo : handle empty ready list
     }
     switch(current_thread->getState()){
-        case RUN:
-            current_thread->setState(READY);
-            tready.push_back(current_thread);
-            //todo : update clock
-            current_thread = tready.front();
-            tready.pop_front();
-            current_thread->inc_calls();
-            total_quant++;
-            return;
+        case RUN: {
+            int ret_val = sigsetjmp(env[current_thread->getId()], 1);
+            if(ret_val == 1){
+                current_thread->setState(READY);
+                tready.push_back(current_thread);
+                current_thread = tready.front();
+                tready.pop_front();
+                timer.it_interval.tv_usec = current_thread->getQuantum();
+                current_thread->inc_calls();
+                total_quant++;
+                return;
+            }
+            siglongjmp(env[current_thread->getId()], 1);
+        }
 
-        case BLOCK:
+
+
+        case BLOCK:{
             // todo : more ?
             uthread_block(current_thread->getId());
             return;
+        }
     }
 }
 
 int reset_time(int quant){
-    struct sigaction sa = {0};
-    struct itimerval timer;
+
     sa.sa_handler = &round_robin;
     if (sigaction(SIGVTALRM, &sa, nullptr) < 0) {
         std::cerr <<  "system error: sigaction error\n";
