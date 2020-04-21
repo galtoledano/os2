@@ -16,6 +16,8 @@ class thread {
 private:
     int quantum;
     int id;
+    int call;
+
 public:
     void setQuantum(int quantum);
 
@@ -33,7 +35,10 @@ public:
     int getId() const;
 
     int getState() const;
-//    ~thread() = default;
+
+    int getCall() const;
+
+    void inc_calls(){call ++;}
 
 };
 

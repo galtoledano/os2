@@ -30,3 +30,7 @@ void thread::setQuantum(int quantum) {
     thread::quantum = quantum;
 }
 
+int thread::getCall() const {
+    return call;
+}
+
