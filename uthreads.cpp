@@ -45,9 +45,9 @@ void round_robin(int sig){
     if(tready.empty()){
        // todo : handle empty ready list
     }
+    int ret_val = sigsetjmp(env[current_thread->getId()], 1);
     switch(current_thread->getState()){
         case RUN: {
-            int ret_val = sigsetjmp(env[current_thread->getId()], 1);
             if(ret_val == 1){
                 current_thread->setState(READY);
                 tready.push_back(current_thread);
@@ -61,12 +61,15 @@ void round_robin(int sig){
             siglongjmp(env[current_thread->getId()], 1);
         }
 
-
-
         case BLOCK:{
-            // todo : more ?
-            uthread_block(current_thread->getId());
-            return;
+            if(ret_val == 1){
+                current_thread = tready.front();
+                tready.pop_front();
+                current_thread->inc_calls();
+                total_quant++;
+                return;
+            }
+            siglongjmp(env[current_thread->getId()], 1);
         }
     }
 }
@@ -175,14 +178,36 @@ int uthread_terminate(int tid){
             //todo like this ?
             threads.clear();
         }
-        //todo : stop pointing on the threads from thr queues!
+        //todo : stop pointing on the threads from the queues!
         exit(0);
     }
     else{
-        int s = threads[tid]->getState();
+        int terminated_state = threads[tid]->getState();
+        switch(terminated_state){
+            case RUN:
+            {
+                uthread_block(tid);
+                delete(threads[tid]);
+                threads[tid] = nullptr;
+                return 0;
+            }
+            case BLOCK:
+            {
+                delete(threads[tid]);
+                threads[tid] = nullptr;
+                return 0;
+
+            }
+            case READY:
+            {
+                tready.erase(std::remove(tready.begin(), tready.end(), threads[tid]), tready.end());
+                delete(threads[tid]);
+                threads[tid] = nullptr;
+                return 0;
+            }
+        }
         //todo : delete from the state queue !
         threads[tid] = nullptr;
-        threads_counter--;
         return 0;
     }
     // todo thread terminates itself ???
@@ -210,8 +235,8 @@ int uthread_block(int tid){
         std::cerr <<  "thread library error: can't block the main thread\n";
         return -1;
     }
-    int s = threads[tid]->getState();
-    if(s == READY){
+    int blocking_state = threads[tid]->getState();
+    if(blocking_state == READY){
 //        std::deque<threads*>::iterator it =std::find(tready.begin(), tready.end(), threads[tid]);
 //        if(it!=threads.end()) {
 //            it = tready.erase(it);
@@ -219,9 +244,9 @@ int uthread_block(int tid){
         tready.erase(std::remove(tready.begin(), tready.end(), threads[tid]), tready.end());
         threads[tid]->setState(BLOCK);
     }
-    if(s == RUN){
-        //todo : stop the run !
+    if(blocking_state == RUN){
         threads[tid]->setState(BLOCK);
+        reset_time(tready.front()->getQuantum());
     }
     // todo: thread blocks itself ??
     return 0;
