@@ -20,21 +20,21 @@ std::deque<thread*> tready;
 std::vector<int> quantums_list;
 std::vector<thread*> threads(MAX_THREAD_NUM);
 
-
 void round_robin(int sig){
     if(tready.empty()){
        // todo : handle empty ready list
     }
     switch(current_thread->getState()){
         case RUN:
-            tready.push_back(current_thread);
             current_thread->setState(READY);
-            // todo : update clock
+            tready.push_back(current_thread);
+            //todo : update clock
             current_thread = tready.front();
             tready.pop_front();
-
+            current_thread->inc_calls();
+            total_quant++;
             return;
-
+            
         case BLOCK:
             return;
     }
