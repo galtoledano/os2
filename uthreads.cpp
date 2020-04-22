@@ -15,6 +15,7 @@
 #include "uthreads.h"
 #include "thread.h"
 
+// todo : add stack and handle by creating new thread, terminate, block.
 typedef unsigned long address_t;
 
 void empty(){}
@@ -43,6 +44,7 @@ address_t translate_address(address_t addr)
 
 void round_robin(int sig){
     if(tready.empty()){
+        return;
        // todo : handle empty ready list
     }
     int ret_val = sigsetjmp(env[current_thread->getId()], 1);
@@ -101,10 +103,8 @@ int uthread_init(int *quantum_usecs, int size){
     }
     //todo quantums_list = quantum_usecs;
     thread* main_thread = new thread(quantum_usecs[0], 0 , empty);
-    // todo: the RR algorithm
     int threads_counter = 1;
     reset_time(main_thread->getQuantum());
-    //thread* threads_list = new thread[MAX_THREAD_NUM];
     return 0;
 }
 
@@ -154,7 +154,6 @@ int uthread_change_priority(int tid, int priority){
     }
     threads[tid]->setQuantum(quantums_list[priority]);
     return 0;
-    //todo : current running thread ??
 }
 
 /*
@@ -169,6 +168,10 @@ int uthread_change_priority(int tid, int priority){
  * thread is terminated, the function does not return.
 */
 int uthread_terminate(int tid){
+    if(tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
+        std::cerr <<  "thread library error: the thread dose not exist !\n";
+        return -1;
+    }
     if(tid == 0){
         for (int i = 0; i < MAX_THREAD_NUM; ++i) {
             if(threads[i] != nullptr){
@@ -177,8 +180,13 @@ int uthread_terminate(int tid){
             }
             //todo like this ?
             threads.clear();
+            tready.erase(tready.begin(), tready.end());
         }
-        //todo : stop pointing on the threads from the queues!
+        if (tready.empty())
+        {
+            delete(&tready);
+            // tready = nullptr; //todo
+        }
         exit(0);
     }
     else{
@@ -206,7 +214,6 @@ int uthread_terminate(int tid){
                 return 0;
             }
         }
-        //todo : delete from the state queue !
         threads[tid] = nullptr;
         return 0;
     }
@@ -237,10 +244,6 @@ int uthread_block(int tid){
     }
     int blocking_state = threads[tid]->getState();
     if(blocking_state == READY){
-//        std::deque<threads*>::iterator it =std::find(tready.begin(), tready.end(), threads[tid]);
-//        if(it!=threads.end()) {
-//            it = tready.erase(it);
-//        }
         tready.erase(std::remove(tready.begin(), tready.end(), threads[tid]), tready.end());
         threads[tid]->setState(BLOCK);
     }
@@ -302,7 +305,10 @@ int uthread_get_total_quantums(){
  * 			     On failure, return -1.
 */
 int uthread_get_quantums(int tid){
-    // todo: fail ? 
+    if(tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
+        std::cerr <<  "thread library error: the thread dose not exist !\n";
+        return -1;
+    }
     return threads[tid]->getCall();
 }
 
