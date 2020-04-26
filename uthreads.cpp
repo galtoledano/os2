@@ -19,35 +19,25 @@
 typedef unsigned long address_t;
 
 void empty(){}
-struct sigaction sa = {0}; // todo : move back to reset timer ?
-struct itimerval timer;
-sigjmp_buf env[MAX_THREAD_NUM];  // todo : good ?
 static int threads_counter = 1;
 static int total_quant = 0;
 thread* current_thread;
 std::deque<thread*> tready;
 std::vector<int> quantums_list;
 std::vector<thread*> threads(MAX_THREAD_NUM);
+struct itimerval timer;
 
 
-/* A translation is required when using an address of a variable.
-   Use this as a black box in your code. */
-address_t translate_address(address_t addr)
-{
-    address_t ret;
-    asm volatile("xor    %%gs:0x18,%0\n"
-                 "rol    $0x9,%0\n"
-    : "=g" (ret)
-    : "0" (addr));
-    return ret;
-}
+
+
+// stack size for not lozers = 4096
 
 void round_robin(int sig){
     if(tready.empty()){
         return;
        // todo : handle empty ready list
     }
-    int ret_val = sigsetjmp(env[current_thread->getId()], 1);
+    int ret_val = sigsetjmp(current_thread->getEnv(), 1);
     switch(current_thread->getState()){
         case RUN: {
             if(ret_val == 1){
@@ -60,7 +50,7 @@ void round_robin(int sig){
                 total_quant++;
                 return;
             }
-            siglongjmp(env[current_thread->getId()], 1);
+            siglongjmp(current_thread->getEnv(), 1);
         }
 
         case BLOCK:{
@@ -71,12 +61,13 @@ void round_robin(int sig){
                 total_quant++;
                 return;
             }
-            siglongjmp(env[current_thread->getId()], 1);
+            siglongjmp(current_thread->getEnv(), 1);
         }
     }
 }
 
 int reset_time(int quant){
+    struct sigaction sa = {0};
 
     sa.sa_handler = &round_robin;
     if (sigaction(SIGVTALRM, &sa, nullptr) < 0) {
@@ -95,6 +86,11 @@ int reset_time(int quant){
 }
 
 int uthread_init(int *quantum_usecs, int size){
+    if(size <= 0)
+    {
+        std::cerr << "thread library error: invalid input\n";
+        return -1;
+    }
     for(int i=0; i<size; ++i){
         if(quantum_usecs[i] < 0){
             std::cerr << "thread library error: there is a negative quantum size\n";
@@ -103,8 +99,12 @@ int uthread_init(int *quantum_usecs, int size){
     }
     //todo quantums_list = quantum_usecs;
     thread* main_thread = new thread(quantum_usecs[0], 0 , empty);
-    int threads_counter = 1;
+    total_quant ++;
+    main_thread->inc_calls();
+    //int threads_counter = 1;
+    threads[0] = main_thread;
     reset_time(main_thread->getQuantum());
+
     return 0;
 }
 
@@ -126,6 +126,7 @@ int uthread_spawn(void (*f)(void), int priority){
     }
     for (int i = 0; i < MAX_THREAD_NUM; ++i) {
         if (threads[i] == nullptr){
+            int x = quantums_list[priority];
             auto t = new thread(quantums_list[priority], i, f);
             if(t == nullptr){
                 std::cerr << "system error: can't alloc memory\n";
@@ -148,7 +149,7 @@ int uthread_spawn(void (*f)(void), int priority){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_change_priority(int tid, int priority){
-    if(priority >= quantums_list.size()){
+    if(priority >= (int)quantums_list.size()){
         std::cerr <<  "thread library error: wrong priority\n";
         return -1;
     }
