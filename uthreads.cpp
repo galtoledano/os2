@@ -14,85 +14,108 @@
 
 // todo : add stack and handle by creating new thread, terminate, block.
 typedef unsigned long address_t;
+struct sigaction sa = {0};
 
-void empty(){std::cout<<"gal"<<std::endl;}
+void empty(){
+    std::cout<<"gal"<<std::endl;
+    int x = 2;
+    std::cout<<x<<std::endl;
+}
 bool sig_mask = false;
 static int threads_counter = 0;
 static int total_quant = 0;
-thread* current_thread;
-std::deque<thread*> tready;
+int current_thread = 0;
+std::deque<int> tready;
 int* quantums_list;
 std::vector<thread*> threads (MAX_THREAD_NUM);
 struct itimerval timer;
 int list_size;
 
-
-
-
 // stack size for not lozers = 4096
 
-void round_robin(int sig){
-//    std::cout<<"hi eveybody"<<std::endl;
-    if(sig_mask){
-        return;
-    }
-    if(tready.empty()){
-//        threads[0]->inc_calls();
-//        total_quant++;
-        return;
-       // todo : handle empty ready list
-    }
-    switch(current_thread->getState()){
-        case RUN: {
-            total_quant++;
-            int ret_val = sigsetjmp(*current_thread->getEnv(), 1);
-            if(ret_val == 1){
-                std::cout<<"thread : " << current_thread->getId() << std::endl;
-                current_thread->setState(READY);
-                tready.push_back(current_thread);
-                current_thread = tready.front();
-                current_thread->inc_calls();
-                current_thread->setState(RUN);
-                tready.pop_front();
-//                timer.it_interval.tv_usec = current_thread->getQuantum();
-                return;
-            }
-            siglongjmp(*current_thread->getEnv(), 1);
-            return;
-        }
 
-        case BLOCK:{
-            std::cout<<"mode : block, thread : " << current_thread->getId() <<std::endl;
-            current_thread = tready.front();
-            tready.pop_front();
-            current_thread->inc_calls();
-//            total_quant++;
-            break;
-        }
-        default:{
-            return;}
-    }
-}
+//void changeThread2(int sig) {
+////    blockAlrmSig();
+//    int ret_val = sigsetjmp(*threads.at(current_thread)->getEnv(),1);
+//    printf("SWITCH: ret_val=%d\n", ret_val); //todo delete
+//    if (ret_val == 1) {
+//        printf("SWITCH: ret_val=%d\n", ret_val);
+//        return;
+//    }
+//
+//
+//    current_thread = ThreadManager2::getManager()->timeChangeThread();
+//    auto thread_tmp = threads.at(current_thread); //todo delete
+////    unblockAlrmSig();
+//    setTimer(thread_tmp->getQuantum());
+//    siglongjmp(*thread_tmp->getEnv(),1);
+//}
+
+
 
 int reset_time(int quant){
-    struct sigaction sa = {0};
-
-    sa.sa_handler = &round_robin;
-    if (sigaction(SIGVTALRM, &sa, nullptr) < 0) {
-        std::cerr <<  "system error: sigaction error\n";
-        return -1;
-    }
-    timer.it_value.tv_sec = 0;
-    timer.it_value.tv_usec = quant;
-    timer.it_interval.tv_sec = 0;
-    timer.it_interval.tv_usec = quant;
-    if (setitimer (ITIMER_VIRTUAL, &timer, nullptr)) {
+    timer.it_value.tv_sec = quant / SECOND;
+    timer.it_value.tv_usec = quant % SECOND;
+    timer.it_interval.tv_sec = quant / SECOND;
+    timer.it_interval.tv_usec = quant % SECOND;
+    if (setitimer (ITIMER_VIRTUAL, &timer, nullptr) < 0) {
         std::cerr <<  "system error: setitimer error\n";
         return -1;
     }
     return 0;
 }
 
+void round_robin(int sig, int blocket_ret = 0){
+    if(tready.empty()){
+        total_quant ++;
+        threads[current_thread]->inc_calls();
+        reset_time(threads.at(current_thread)->getQuantum());
+        return;
+    }
+    if(sig == SIGINT ||threads[current_thread]->getState() == BLOCK){
+        std::cout<<"mode : block" << std::endl;
+        if(blocket_ret == 0){
+            current_thread = tready.front();
+            tready.pop_front();
+            threads[current_thread]->setState(RUN);
+            threads[current_thread]->inc_calls();
+        } else{
+            return;
+        }
+    }
+    else if(threads[current_thread]->getState() == RUN){
+        int ret_val = sigsetjmp(*threads.at(current_thread)->getEnv(), 1);
+        if(ret_val == 0) {
+            std::cout << "thread : " << threads[current_thread]->getId() << std::endl;
+            threads[current_thread]->setState(READY);
+            tready.push_back(current_thread);
+
+            current_thread = tready.front();
+            tready.pop_front();
+            threads[current_thread]->setState(RUN);
+            threads[current_thread]->inc_calls();
+        }
+        else{
+            return;
+            }
+        }
+
+    else if(threads.at(current_thread) == nullptr){
+        current_thread = tready.front();
+        tready.pop_front();
+        threads[current_thread]->setState(RUN);
+        threads[current_thread]->inc_calls();
+    }
+
+    total_quant++;
+    reset_time(threads.at(current_thread)->getQuantum());
+    siglongjmp(*(threads.at(current_thread)->getEnv()), 1);
+    return;
+}
+
+void time_handler(int sig){
+    round_robin(sig);
+}
 int uthread_init(int *quantum_usecs, int size){
     if(size <= 0)
     {
@@ -105,20 +128,25 @@ int uthread_init(int *quantum_usecs, int size){
             return -1;
         }
     }
-    char* stack = new char[MAX_THREAD_NUM];
+    //init main thread
+    char* stack = new char[STACK_SIZE];
     quantums_list = new int[size];
     quantums_list = quantum_usecs;
-    auto main_thread = new thread(quantum_usecs[0], 0 , (address_t)(empty), (address_t )(&stack));
-    main_thread->setState(RUN);
-    total_quant ++;
-    current_thread = main_thread;
-    main_thread->inc_calls();
-    threads[0] = main_thread;
-    reset_time(main_thread->getQuantum());
     list_size = size;
-//    int ret = sigsetjmp(*main_thread->getEnv(), 1);
-//    if (ret == 1){return 0;}
-//    siglongjmp(*main_thread->getEnv(), 1);
+
+    threads.at(0) = new thread(quantum_usecs[0], 0 , (address_t)(empty), (address_t )(&stack));
+    threads.at(0)->setState(RUN);
+
+    // init signal set
+    sa.sa_handler = &time_handler;
+    if (sigaction(SIGVTALRM, &sa, nullptr) < 0) {
+        std::cerr <<  "system error: sigaction error\n";
+        return -1;
+    }
+
+    total_quant ++;
+    threads.at(0)->inc_calls();
+    reset_time(threads.at(0)->getQuantum());
     return 0;
 }
 
@@ -142,17 +170,16 @@ int uthread_spawn(void (*f)(void), int priority){
         std::cerr << "thread library error: bad priority\n";
         return -1;
     }
+    auto addr =  (address_t)f;
     for (int i = 0; i < MAX_THREAD_NUM; ++i) {
         if (threads[i] == nullptr){
-            auto addr =  (address_t)f;
-            char* stack = new char[MAX_THREAD_NUM];
-            auto t = new thread(quantums_list[priority], i, addr, (address_t)(&stack));
-            if(t == nullptr){
+            char* stack = new char[STACK_SIZE];
+            threads.at(i) = new thread(quantums_list[priority], i, addr, (address_t)(&stack));
+            if(threads[i] == nullptr){
                 std::cerr << "system error: can't alloc memory\n";
                 return -1;
             }
-            threads[i] = t;
-            tready.push_back(t);
+            tready.push_back(i);
             threads_counter ++;
             return i;
         }
@@ -205,13 +232,12 @@ int uthread_terminate(int tid){
             threads.clear();
             tready.erase(tready.begin(), tready.end());
         }
-//        if (tready.empty())
-//        {
-//            delete(&tready);
-            // tready = nullptr;
-//        }
         exit(0);
     }
+//    else if(tid == current_thread){
+//        round_robin(0);
+//    }
+    //todo : all of this ?
     else{
         threads_counter --;
         int terminated_state = threads[tid]->getState();
@@ -219,11 +245,12 @@ int uthread_terminate(int tid){
             case RUN:
             {
                 sig_mask = true;
-                uthread_block(tid);
+//                uthread_block(tid);
+
                 delete(threads[tid]);
                 threads[tid] = nullptr;
                 sig_mask = false;
-                round_robin(SIGINT);
+                round_robin(SIGINT, 0);
                 return 0;
             }
             case BLOCK:
@@ -238,7 +265,7 @@ int uthread_terminate(int tid){
             case READY:
             {
                 sig_mask = true;
-                tready.erase(std::remove(tready.begin(), tready.end(), threads[tid]), tready.end());
+                tready.erase(std::remove(tready.begin(), tready.end(), tid), tready.end());
                 delete(threads[tid]);
                 threads[tid] = nullptr;
                 sig_mask = false;
@@ -249,7 +276,6 @@ int uthread_terminate(int tid){
 
         return 0;
     }
-    // todo thread terminates itself ???
     std::cerr <<  "thread library error: can't delete the thread\n";
     return -1;
 }
@@ -277,18 +303,20 @@ int uthread_block(int tid){
     int blocking_state = threads[tid]->getState();
     if(blocking_state == READY){
         sig_mask = true;
-        tready.erase(std::remove(tready.begin(), tready.end(), threads[tid]), tready.end());
+        tready.erase(std::remove(tready.begin(), tready.end(), tid), tready.end());
         threads[tid]->setState(BLOCK);
     }
     if(blocking_state == RUN){
         threads[tid]->setState(BLOCK);
-        reset_time(tready.front()->getQuantum());
+        int ret = sigsetjmp(*threads.at(current_thread)->getEnv(),1);
+        round_robin(0, ret);
+//        reset_time(threads[tready.front()]->getQuantum());
     }
     sig_mask = false;
-    if(tid == current_thread->getId()){
-        current_thread->setState(BLOCK);
-        round_robin(SIGINT);
-        reset_time(threads[tid]->getCall());
+    if(tid == threads[current_thread]->getId()){
+        threads[current_thread]->setState(BLOCK);
+//        round_robin(SIGINT);
+//        reset_time(threads[tid]->getCall());
     }
     return 0;
 }
@@ -306,7 +334,7 @@ int uthread_resume(int tid){
     }
     int s = threads[tid]->getState();
     if(s == BLOCK){
-        tready.push_back(threads[tid]);
+        tready.push_back(tid);
         threads[tid]->setState(READY);
     }
     return 0;
@@ -317,7 +345,7 @@ int uthread_resume(int tid){
  * Return value: The ID of the calling thread.
 */
 int uthread_get_tid(){
-    return current_thread->getId();
+    return threads[current_thread]->getId();
 }
 
 /*

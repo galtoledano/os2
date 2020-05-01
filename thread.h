@@ -36,7 +36,7 @@ private:
     int id;
     int call;
     int state;
-    jmp_buf env;
+    sigjmp_buf env;
 //    char* stack;
     address_t pc;
     address_t sp;
@@ -60,7 +60,7 @@ public:
 
     void inc_calls(){call ++;}
 
-    jmp_buf *getEnv();
+    sigjmp_buf *getEnv();
 
 
 };

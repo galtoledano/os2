@@ -5,6 +5,9 @@
 
 #include <cstdio>
 #include "uthreads.h"
+#include <stdio.h>
+#include <iostream>
+
 
 #define GRN "\e[32m"
 #define RED "\x1B[31m"
@@ -33,6 +36,8 @@ void thread()
 
     //uthread_sync(next_thread());
 
+    std::cout << "in function ! " << std::endl;
+
     uthread_block(uthread_get_tid());
 
     for (int i = 0; i < 50; i++)
@@ -47,10 +52,12 @@ void thread()
 
 bool all_done()
 {
+//    std::cout << "in all_done" << std::endl;
     bool res = true;
     for (int i = 1; i < NUM_THREADS; i++)
     {
         res = res && (thread_status[i] == DONE);
+//        std::cout << res << std::endl;
     }
     return res;
 }
@@ -68,11 +75,13 @@ int main()
 
     for (int i = 0; i < NUM_THREADS; i++)
     {
+        std::cout << "in for" << std::endl;
         thread_status[i] = RUN;
     }
 
     while (!all_done())
     {
+//        std::cout << "in while" << std::endl;
         uthread_resume(1);
     }
 

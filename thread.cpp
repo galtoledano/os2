@@ -46,19 +46,19 @@ address_t translate_address(address_t addr)
 #endif
 
 thread::thread(int quantum, int id, address_t foo, address_t stack) : quantum(quantum), id(id),
-            pc(foo), sp(stack), call(0), state(READY){
+            pc(foo), call(0), state(READY){
 
 //    this->call = 0;
 //    this->state = RUN;
-//    this->sp = (address_t)stack + STACK_SIZE - sizeof(address_t);
+    this->sp = stack + STACK_SIZE - sizeof(address_t);
     sigsetjmp(env, 1);
-    (env->__jmpbuf)[JB_SP] = translate_address(this->sp);
-    (env->__jmpbuf)[JB_PC] = translate_address(this->pc);
+    (env->__jmpbuf)[JB_SP] = translate_address(sp);
+    (env->__jmpbuf)[JB_PC] = translate_address(pc);
     sigemptyset(&env->__saved_mask);
 
 }
 
-jmp_buf *thread::getEnv(){
+sigjmp_buf *thread::getEnv(){
     return &env;
 }
 
