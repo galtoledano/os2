@@ -1,89 +1,105 @@
 /**********************************************
- * Test 5: sync/block/resume
+ * Test 42: each thread has its own unique stack
  *
  **********************************************/
 
 #include <cstdio>
+#include <cstdlib>
 #include "uthreads.h"
-#include <stdio.h>
-#include <iostream>
-
 
 #define GRN "\e[32m"
 #define RED "\x1B[31m"
 #define RESET "\x1B[0m"
 
-#define NUM_THREADS 4
+#define NUM_THREADS 7
 #define RUN 0
 #define DONE 1
+
 char thread_status[NUM_THREADS];
-
-
-void halt()
-{
-    while (true)
-    {}
-}
 
 int next_thread()
 {
     return (uthread_get_tid() + 1) % NUM_THREADS;
 }
 
-void thread()
+void wait_next_quantum()
 {
-    //uthread_sync(next_thread());
+    int quantum = uthread_get_quantums(uthread_get_tid());
+    while (uthread_get_quantums(uthread_get_tid()) == quantum)
+    {}
+    return;
+}
 
-    //uthread_sync(next_thread());
+void run_test()
+{
+    int tid = uthread_get_tid();
+    int arr[10];
 
-    std::cout << "in function ! " << std::endl;
-
-    uthread_block(uthread_get_tid());
-
-    for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 10; i++)
     {
-        uthread_resume(next_thread());
+        arr[i] = i * tid;
+    }
+
+    //uthread_sync(next_thread());
+
+    for (int i = 0; i < 10; i++)
+    {
+        if (arr[i] != i * tid)
+        {
+            printf(RED "ERROR - stack values changed\n" RESET);
+            exit(1);
+        }
+    }
+
+    int b1 = tid * 314, b2 = tid * 141;
+
+    // let switching be invoked by the timer
+    wait_next_quantum();
+
+
+    if ((b1 != tid * 314) || (b2 != tid * 141) || (tid != uthread_get_tid()))
+    {
+        printf(RED "ERROR - stack values changed\n" RESET);
+        exit(1);
     }
 
     thread_status[uthread_get_tid()] = DONE;
-
-    halt();
+    uthread_terminate(uthread_get_tid());
 }
 
 bool all_done()
 {
-//    std::cout << "in all_done" << std::endl;
     bool res = true;
     for (int i = 1; i < NUM_THREADS; i++)
     {
         res = res && (thread_status[i] == DONE);
-//        std::cout << res << std::endl;
     }
     return res;
 }
 
+
 int main()
 {
-    printf(GRN "Test 5:    " RESET);
+    printf(GRN "Test 42:   " RESET);
     fflush(stdout);
 
     int q[2] = {10, 20};
     uthread_init(q, 2);
-    uthread_spawn(thread, 0);
-    uthread_spawn(thread, 0);
-    uthread_spawn(thread, 1);
+    uthread_spawn(run_test, 0);
+    uthread_spawn(run_test, 1);
+    uthread_spawn(run_test, 0);
+    uthread_spawn(run_test, 1);
+    uthread_spawn(run_test, 0);
+    uthread_spawn(run_test, 0);
 
-    for (int i = 0; i < NUM_THREADS; i++)
+    for (int i = 1; i < NUM_THREADS; i++)
     {
-        std::cout << "in for" << std::endl;
         thread_status[i] = RUN;
     }
 
+
     while (!all_done())
-    {
-//        std::cout << "in while" << std::endl;
-        uthread_resume(1);
-    }
+    {}
 
     printf(GRN "SUCCESS\n" RESET);
     uthread_terminate(0);

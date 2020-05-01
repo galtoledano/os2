@@ -7,21 +7,20 @@
 #include <deque>
 #include <vector>
 #include <algorithm>
-
 #include "uthreads.h"
 #include "thread.h"
+
 
 
 // todo : add stack and handle by creating new thread, terminate, block.
 typedef unsigned long address_t;
 struct sigaction sa = {0};
-
+sigset_t sigSet;
 void empty(){
     std::cout<<"gal"<<std::endl;
     int x = 2;
     std::cout<<x<<std::endl;
 }
-bool sig_mask = false;
 static int threads_counter = 0;
 static int total_quant = 0;
 int current_thread = 0;
@@ -34,22 +33,13 @@ int list_size;
 // stack size for not lozers = 4096
 
 
-//void changeThread2(int sig) {
-////    blockAlrmSig();
-//    int ret_val = sigsetjmp(*threads.at(current_thread)->getEnv(),1);
-//    printf("SWITCH: ret_val=%d\n", ret_val); //todo delete
-//    if (ret_val == 1) {
-//        printf("SWITCH: ret_val=%d\n", ret_val);
-//        return;
-//    }
-//
-//
-//    current_thread = ThreadManager2::getManager()->timeChangeThread();
-//    auto thread_tmp = threads.at(current_thread); //todo delete
-////    unblockAlrmSig();
-//    setTimer(thread_tmp->getQuantum());
-//    siglongjmp(*thread_tmp->getEnv(),1);
-//}
+bool handle_signals(int state){
+    if(sigprocmask(state, &sigSet, NULL) == -1){
+        std::cerr << "System error : failed at blocking signals"<< std::endl;
+        return false;
+    }
+    return true;
+}
 
 
 
@@ -162,12 +152,15 @@ int uthread_init(int *quantum_usecs, int size){
  * On failure, return -1.
 */
 int uthread_spawn(void (*f)(void), int priority){
+    if(!handle_signals(SIG_BLOCK)){return  -1;}
     if (threads_counter >= MAX_THREAD_NUM){
         std::cerr << "thread library error: too many threads\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     if(priority < 0 || priority >= list_size){
         std::cerr << "thread library error: bad priority\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     auto addr =  (address_t)f;
@@ -177,14 +170,17 @@ int uthread_spawn(void (*f)(void), int priority){
             threads.at(i) = new thread(quantums_list[priority], i, addr, (address_t)(&stack));
             if(threads[i] == nullptr){
                 std::cerr << "system error: can't alloc memory\n";
+                handle_signals(SIG_UNBLOCK);
                 return -1;
             }
             tready.push_back(i);
             threads_counter ++;
+            if(!handle_signals(SIG_UNBLOCK)){return -1;}
             return i;
         }
     }
     std::cerr << "thread library error: too many threads\n";
+    handle_signals(SIG_UNBLOCK);
     return -1;
 }
 
@@ -195,15 +191,19 @@ int uthread_spawn(void (*f)(void), int priority){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_change_priority(int tid, int priority){
+    if(!handle_signals(SIG_BLOCK)){return -1;}
     if(priority < 0  || priority >= list_size){
         std::cerr <<  "thread library error: wrong priority\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     if(tid < 0 || tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
         std::cerr <<  "thread library error: wrong tid\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     threads[tid]->setQuantum(quantums_list[priority]);
+    if(!handle_signals(SIG_UNBLOCK)){return -1;}
     return 0;
 }
 
@@ -219,8 +219,10 @@ int uthread_change_priority(int tid, int priority){
  * thread is terminated, the function does not return.
 */
 int uthread_terminate(int tid){
+    if(!handle_signals(SIG_BLOCK)){return -1;}
     if(tid >= MAX_THREAD_NUM || threads[tid] == nullptr || tid < 0 ){
         std::cerr <<  "thread library error: the thread dose not exist !\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     if(tid == 0){
@@ -232,48 +234,42 @@ int uthread_terminate(int tid){
             threads.clear();
             tready.erase(tready.begin(), tready.end());
         }
+        sigemptyset(&sigSet);
+        if(!handle_signals(SIG_UNBLOCK)){return -1;}
         exit(0);
     }
-//    else if(tid == current_thread){
-//        round_robin(0);
-//    }
-    //todo : all of this ?
+    // todo  : handle all situations :
     else{
         threads_counter --;
         int terminated_state = threads[tid]->getState();
         switch(terminated_state){
             case RUN:
             {
-                sig_mask = true;
-//                uthread_block(tid);
-
                 delete(threads[tid]);
                 threads[tid] = nullptr;
-                sig_mask = false;
                 round_robin(SIGINT, 0);
+                if(!handle_signals(SIG_UNBLOCK)){return -1;}
                 return 0;
             }
             case BLOCK:
             {
-                sig_mask = true;
                 delete(threads[tid]);
                 threads[tid] = nullptr;
-                sig_mask = false;
+                if(!handle_signals(SIG_UNBLOCK)){return -1;}
                 return 0;
 
             }
             case READY:
             {
-                sig_mask = true;
                 tready.erase(std::remove(tready.begin(), tready.end(), tid), tready.end());
                 delete(threads[tid]);
                 threads[tid] = nullptr;
-                sig_mask = false;
+                if(!handle_signals(SIG_UNBLOCK)){return -1;}
                 return 0;
             }
         }
         threads[tid] = nullptr;
-
+        if(!handle_signals(SIG_UNBLOCK)){return -1;}
         return 0;
     }
     std::cerr <<  "thread library error: can't delete the thread\n";
@@ -291,33 +287,32 @@ int uthread_terminate(int tid){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_block(int tid){
+    if(!handle_signals(SIG_BLOCK)){return -1;}
     if(threads[tid] == nullptr || tid < 0 || tid >= MAX_THREAD_NUM){
         std::cerr <<  "thread library error: no thread like that\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     if(tid == 0)
     {
         std::cerr <<  "thread library error: can't block the main thread\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     int blocking_state = threads[tid]->getState();
+//    if(tid == current_thread){
+//        threads[current_thread]->setState(BLOCK);
+//    }
     if(blocking_state == READY){
-        sig_mask = true;
         tready.erase(std::remove(tready.begin(), tready.end(), tid), tready.end());
         threads[tid]->setState(BLOCK);
     }
-    if(blocking_state == RUN){
+    else if(blocking_state == RUN){
         threads[tid]->setState(BLOCK);
         int ret = sigsetjmp(*threads.at(current_thread)->getEnv(),1);
         round_robin(0, ret);
-//        reset_time(threads[tready.front()]->getQuantum());
     }
-    sig_mask = false;
-    if(tid == threads[current_thread]->getId()){
-        threads[current_thread]->setState(BLOCK);
-//        round_robin(SIGINT);
-//        reset_time(threads[tid]->getCall());
-    }
+    if(!handle_signals(SIG_UNBLOCK)){return -1;}
     return 0;
 }
 /*
@@ -328,15 +323,18 @@ int uthread_block(int tid){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_resume(int tid){
+    if(!handle_signals(SIG_BLOCK)){return -1;}
     if(tid < 0 || tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
         std::cerr <<  "thread library error: no thread like that\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
     int s = threads[tid]->getState();
-    if(s == BLOCK){
+    if(s == BLOCK){ // todo : only for blocked ?
         tready.push_back(tid);
         threads[tid]->setState(READY);
     }
+    if(!handle_signals(SIG_UNBLOCK)){return -1;}
     return 0;
 }
 
@@ -371,9 +369,12 @@ int uthread_get_total_quantums(){
  * 			     On failure, return -1.
 */
 int uthread_get_quantums(int tid) {
+    if(!handle_signals(SIG_BLOCK)){return -1;}
     if (tid < 0 || tid >= MAX_THREAD_NUM || threads[tid] == nullptr) {
         std::cerr << "thread library error: the thread dose not exist !\n";
+        handle_signals(SIG_UNBLOCK);
         return -1;
     }
+    if(!handle_signals(SIG_UNBLOCK)){return -1;}
     return threads[tid]->getCall();
 }
