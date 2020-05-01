@@ -17,13 +17,14 @@ typedef unsigned long address_t;
 
 void empty(){std::cout<<"gal"<<std::endl;}
 bool sig_mask = false;
-static int threads_counter = 1;
+static int threads_counter = 0;
 static int total_quant = 0;
 thread* current_thread;
 std::deque<thread*> tready;
 int* quantums_list;
 std::vector<thread*> threads (MAX_THREAD_NUM);
 struct itimerval timer;
+int list_size;
 
 
 
@@ -99,7 +100,7 @@ int uthread_init(int *quantum_usecs, int size){
         return -1;
     }
     for(int i=0; i<size; ++i){
-        if(quantum_usecs[i] < 0){
+        if(quantum_usecs[i] <= 0){
             std::cerr << "thread library error: there is a negative quantum size\n";
             return -1;
         }
@@ -114,6 +115,7 @@ int uthread_init(int *quantum_usecs, int size){
     main_thread->inc_calls();
     threads[0] = main_thread;
     reset_time(main_thread->getQuantum());
+    list_size = size;
 //    int ret = sigsetjmp(*main_thread->getEnv(), 1);
 //    if (ret == 1){return 0;}
 //    siglongjmp(*main_thread->getEnv(), 1);
@@ -134,6 +136,10 @@ int uthread_init(int *quantum_usecs, int size){
 int uthread_spawn(void (*f)(void), int priority){
     if (threads_counter >= MAX_THREAD_NUM){
         std::cerr << "thread library error: too many threads\n";
+        return -1;
+    }
+    if(priority < 0 || priority >= list_size){
+        std::cerr << "thread library error: bad priority\n";
         return -1;
     }
     for (int i = 0; i < MAX_THREAD_NUM; ++i) {
@@ -162,10 +168,14 @@ int uthread_spawn(void (*f)(void), int priority){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_change_priority(int tid, int priority){
-//    if(priority >= 100000){
-//        std::cerr <<  "thread library error: wrong priority\n";
-//        return -1;
-//    }
+    if(priority < 0  || priority >= list_size){
+        std::cerr <<  "thread library error: wrong priority\n";
+        return -1;
+    }
+    if(tid < 0 || tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
+        std::cerr <<  "thread library error: wrong tid\n";
+        return -1;
+    }
     threads[tid]->setQuantum(quantums_list[priority]);
     return 0;
 }
@@ -182,7 +192,7 @@ int uthread_change_priority(int tid, int priority){
  * thread is terminated, the function does not return.
 */
 int uthread_terminate(int tid){
-    if(tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
+    if(tid >= MAX_THREAD_NUM || threads[tid] == nullptr || tid < 0 ){
         std::cerr <<  "thread library error: the thread dose not exist !\n";
         return -1;
     }
@@ -192,18 +202,18 @@ int uthread_terminate(int tid){
                 delete(threads[i]);
                 threads[i] = nullptr;
             }
-            //todo like this ?
             threads.clear();
             tready.erase(tready.begin(), tready.end());
         }
-        if (tready.empty())
-        {
-            delete(&tready);
-            // tready = nullptr; //todo
-        }
+//        if (tready.empty())
+//        {
+//            delete(&tready);
+            // tready = nullptr;
+//        }
         exit(0);
     }
     else{
+        threads_counter --;
         int terminated_state = threads[tid]->getState();
         switch(terminated_state){
             case RUN:
@@ -255,7 +265,7 @@ int uthread_terminate(int tid){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_block(int tid){
-    if(threads[tid] == nullptr){
+    if(threads[tid] == nullptr || tid < 0 || tid >= MAX_THREAD_NUM){
         std::cerr <<  "thread library error: no thread like that\n";
         return -1;
     }
@@ -290,7 +300,7 @@ int uthread_block(int tid){
  * Return value: On success, return 0. On failure, return -1.
 */
 int uthread_resume(int tid){
-    if(threads[tid] == nullptr){
+    if(tid < 0 || tid >= MAX_THREAD_NUM || threads[tid] == nullptr){
         std::cerr <<  "thread library error: no thread like that\n";
         return -1;
     }
@@ -333,7 +343,7 @@ int uthread_get_total_quantums(){
  * 			     On failure, return -1.
 */
 int uthread_get_quantums(int tid) {
-    if (tid >= MAX_THREAD_NUM || threads[tid] == nullptr) {
+    if (tid < 0 || tid >= MAX_THREAD_NUM || threads[tid] == nullptr) {
         std::cerr << "thread library error: the thread dose not exist !\n";
         return -1;
     }
