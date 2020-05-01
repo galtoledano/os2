@@ -5,12 +5,13 @@
 #ifndef OS2_THREAD_H
 #define OS2_THREAD_H
 
-
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/time.h>
+
+
 
 #define SECOND 1000000
 //#define STACK_SIZE 16384
@@ -26,19 +27,24 @@ const int BLOCK = 2;
 
 const int RUN = 0;
 
+#define STACK_SIZE 4096 /* stack size per thread (in bytes) */
+
+
 class thread {
 private:
     int quantum;
     int id;
     int call;
     int state;
-    void(* f)(void);
-    sigjmp_buf env;
-    address_t sp, pc;
+    jmp_buf env;
+//    char* stack;
+    address_t pc;
+    address_t sp;
+
 
 
 public:
-    thread(int quantum, int id, void (*foo)(void));
+    thread(int quantum, int id, address_t foo, address_t stack);
 
     void setState(int state);
 
@@ -54,10 +60,10 @@ public:
 
     void inc_calls(){call ++;}
 
-    sigjmp_buf &getEnv();
+    jmp_buf *getEnv();
 
 
 };
 
 
-#endif //OS2_THREAD_H
+#endif //OS2_THREAD_

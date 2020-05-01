@@ -4,6 +4,7 @@
 
 #include "thread.h"
 
+
 #ifdef __x86_64__
 /* code for 64 bit Intel arch */
 
@@ -44,16 +45,12 @@ address_t translate_address(address_t addr)
 
 #endif
 
-thread::thread(int quantum, int id, void (*foo)(void)) : quantum(quantum), id(id)
-{
-    //todo : change
-    int s = 16384;
-    this->call = 0;
-    this->f = foo;
-    this->state = READY;
-    char stack[s];
-    this->sp = (address_t)stack + s - sizeof(address_t);
-    this->pc = (address_t)f;
+thread::thread(int quantum, int id, address_t foo, address_t stack) : quantum(quantum), id(id),
+            pc(foo), sp(stack), call(0), state(READY){
+
+//    this->call = 0;
+//    this->state = RUN;
+//    this->sp = (address_t)stack + STACK_SIZE - sizeof(address_t);
     sigsetjmp(env, 1);
     (env->__jmpbuf)[JB_SP] = translate_address(this->sp);
     (env->__jmpbuf)[JB_PC] = translate_address(this->pc);
@@ -61,8 +58,8 @@ thread::thread(int quantum, int id, void (*foo)(void)) : quantum(quantum), id(id
 
 }
 
-sigjmp_buf &thread::getEnv(){
-    return env;
+jmp_buf *thread::getEnv(){
+    return &env;
 }
 
 int thread::getQuantum() const {

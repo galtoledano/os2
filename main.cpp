@@ -1,6 +1,7 @@
-#include <iostream>
-#include "uthreads.h"
-int main() {
-    uthread_init([1,2,3,4], 4)
-    return 0;
-}
+//#include <iostream>
+//#include "uthreads.h"
+//#include "jona1.cpp"
+//int main() {
+//    jona1.main();
+//    return 0;
+//}
