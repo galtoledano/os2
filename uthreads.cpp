@@ -12,7 +12,6 @@
 
 
 
-// todo : add stack and handle by creating new thread, terminate, block.
 typedef unsigned long address_t;
 struct sigaction sa = {0};
 sigset_t sigSet;
@@ -55,28 +54,44 @@ int reset_time(int quant){
     return 0;
 }
 
-void round_robin(int sig, int blocket_ret = 0){
+void round_robin(int sig, int blocket_ret = 0, bool is_block = false){
     if(tready.empty()){
-        total_quant ++;
         threads[current_thread]->inc_calls();
         reset_time(threads.at(current_thread)->getQuantum());
+        total_quant ++;
         return;
     }
-    if(sig == SIGINT ||threads[current_thread]->getState() == BLOCK){
-        std::cout<<"mode : block" << std::endl;
-        if(blocket_ret == 0){
+
+    if (is_block) {
+        std::cout << "blocking thread: " << current_thread << std::endl;
+        if (blocket_ret == 0) {
             current_thread = tready.front();
             tready.pop_front();
-            threads[current_thread]->setState(RUN);
             threads[current_thread]->inc_calls();
+            threads[current_thread]->setState(RUN);
         } else{
+            threads[current_thread]->setState(BLOCK);
             return;
-        }
+            }
+        std::cout << "after switching(from block), new thread : " << current_thread <<" sigret : " <<  blocket_ret <<std::endl;
+//        }
+//        else {
+//            std::cout << "thread : " <<current_thread << ", sigret : " <<  blocket_ret << std::endl;
+//            return;
+//        }
     }
-    else if(threads[current_thread]->getState() == RUN){
+
+    else if(threads.at(current_thread) == nullptr){
+        current_thread = tready.front();
+        tready.pop_front();
+        threads[current_thread]->setState(RUN);
+        threads[current_thread]->inc_calls();
+        std::cout << "after switching(from empty pointer), new thread : " << current_thread << std::endl;
+    }
+    else {
         int ret_val = sigsetjmp(*threads.at(current_thread)->getEnv(), 1);
         if(ret_val == 0) {
-            std::cout << "thread : " << threads[current_thread]->getId() << std::endl;
+            std::cout << "switching from thread : " << current_thread << std::endl;
             threads[current_thread]->setState(READY);
             tready.push_back(current_thread);
 
@@ -84,21 +99,18 @@ void round_robin(int sig, int blocket_ret = 0){
             tready.pop_front();
             threads[current_thread]->setState(RUN);
             threads[current_thread]->inc_calls();
+            std::cout << "after switching, new thread : " << current_thread << std::endl;
+
         }
         else{
             return;
             }
         }
 
-    else if(threads.at(current_thread) == nullptr){
-        current_thread = tready.front();
-        tready.pop_front();
-        threads[current_thread]->setState(RUN);
-        threads[current_thread]->inc_calls();
-    }
+//    if(threads[current_thread]->getState() == RUN)
 
-    total_quant++;
     reset_time(threads.at(current_thread)->getQuantum());
+    total_quant++;
     siglongjmp(*(threads.at(current_thread)->getEnv()), 1);
     return;
 }
@@ -106,6 +118,7 @@ void round_robin(int sig, int blocket_ret = 0){
 void time_handler(int sig){
     round_robin(sig);
 }
+
 int uthread_init(int *quantum_usecs, int size){
     if(size <= 0)
     {
@@ -126,6 +139,7 @@ int uthread_init(int *quantum_usecs, int size){
 
     threads.at(0) = new thread(quantum_usecs[0], 0 , (address_t)(empty), (address_t )(&stack));
     threads.at(0)->setState(RUN);
+    threads.at(0)->inc_calls();
 
     // init signal set
     sa.sa_handler = &time_handler;
@@ -134,9 +148,8 @@ int uthread_init(int *quantum_usecs, int size){
         return -1;
     }
 
-    total_quant ++;
-    threads.at(0)->inc_calls();
     reset_time(threads.at(0)->getQuantum());
+    total_quant ++;
     return 0;
 }
 
@@ -307,11 +320,12 @@ int uthread_block(int tid){
         tready.erase(std::remove(tready.begin(), tready.end(), tid), tready.end());
         threads[tid]->setState(BLOCK);
     }
-    else if(blocking_state == RUN){
+    else if(blocking_state == RUN) {
         threads[tid]->setState(BLOCK);
-        int ret = sigsetjmp(*threads.at(current_thread)->getEnv(),1);
-        round_robin(0, ret);
+        int ret = sigsetjmp(*threads.at(current_thread)->getEnv(), 1);
+        round_robin(0, ret, true);
     }
+//    } else if(blocking_state == BLOCK){threads[tid]->inc_calls();}
     if(!handle_signals(SIG_UNBLOCK)){return -1;}
     return 0;
 }
@@ -331,6 +345,7 @@ int uthread_resume(int tid){
     }
     int s = threads[tid]->getState();
     if(s == BLOCK){ // todo : only for blocked ?
+        std::cout<<"resumeing thread : "<< tid << std::endl;
         tready.push_back(tid);
         threads[tid]->setState(READY);
     }
