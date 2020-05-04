@@ -1,107 +1,63 @@
-/**********************************************
- * Test 42: each thread has its own unique stack
+/*
+ * test3.cpp
  *
- **********************************************/
+ *  Created on: Apr 8, 2015
+ *      Author: roigreenberg
+ */
 
-#include <cstdio>
-#include <cstdlib>
+#include <stdio.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <stdlib.h>
+#include <deque>
+#include <list>
+#include <assert.h>
 #include "uthreads.h"
+//#include "libuthread.a"
+#include <iostream>
 
-#define GRN "\e[32m"
-#define RED "\x1B[31m"
-#define RESET "\x1B[0m"
+using namespace std;
 
-#define NUM_THREADS 7
-#define RUN 0
-#define DONE 1
+void f(void){}
 
-char thread_status[NUM_THREADS];
-
-int next_thread()
+int main(void)
 {
-    return (uthread_get_tid() + 1) % NUM_THREADS;
-}
-
-void wait_next_quantum()
-{
-    int quantum = uthread_get_quantums(uthread_get_tid());
-    while (uthread_get_quantums(uthread_get_tid()) == quantum)
-    {}
-    return;
-}
-
-void run_test()
-{
-    int tid = uthread_get_tid();
-    int arr[10];
-
-    for (int i = 0; i < 10; i++)
-    {
-        arr[i] = i * tid;
-    }
-
-    //uthread_sync(next_thread());
-
-    for (int i = 0; i < 10; i++)
-    {
-        if (arr[i] != i * tid)
-        {
-            printf(RED "ERROR - stack values changed\n" RESET);
-            exit(1);
-        }
-    }
-
-    int b1 = tid * 314, b2 = tid * 141;
-
-    // let switching be invoked by the timer
-    wait_next_quantum();
-
-
-    if ((b1 != tid * 314) || (b2 != tid * 141) || (tid != uthread_get_tid()))
-    {
-        printf(RED "ERROR - stack values changed\n" RESET);
-        exit(1);
-    }
-
-    thread_status[uthread_get_tid()] = DONE;
-    uthread_terminate(uthread_get_tid());
-}
-
-bool all_done()
-{
-    bool res = true;
-    for (int i = 1; i < NUM_THREADS; i++)
-    {
-        res = res && (thread_status[i] == DONE);
-    }
-    return res;
-}
-
-
-int main()
-{
-    printf(GRN "Test 42:   " RESET);
-    fflush(stdout);
-
     int q[2] = {10, 20};
-    uthread_init(q, 2);
-    uthread_spawn(run_test, 0);
-    uthread_spawn(run_test, 1);
-    uthread_spawn(run_test, 0);
-    uthread_spawn(run_test, 1);
-    uthread_spawn(run_test, 0);
-    uthread_spawn(run_test, 0);
-
-    for (int i = 1; i < NUM_THREADS; i++)
+    if (uthread_init(q, 2) == -1)
     {
-        thread_status[i] = RUN;
+        return 0;
     }
 
 
-    while (!all_done())
-    {}
+    uthread_terminate(-1);
+    uthread_block(-1);
+    uthread_resume(-1);
+    uthread_get_quantums(-1);
 
-    printf(GRN "SUCCESS\n" RESET);
+    uthread_terminate(1);
+    uthread_block(1);
+    uthread_resume(1);
+    uthread_get_quantums(1);
+
+    uthread_block(0);
+
+    uthread_spawn(f, 0);
+    uthread_terminate(1);
+
+    uthread_terminate(1);
+    uthread_block(1);
+    uthread_resume(1);
+    uthread_get_quantums(1);
+
+    int w[2] = {-10};
+    uthread_init(w, 1);
+    int m[2] = {0};
+    uthread_init(m, 1);
+
+
     uthread_terminate(0);
-
+    return 0;
 }
+

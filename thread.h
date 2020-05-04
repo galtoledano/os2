@@ -14,7 +14,6 @@
 
 
 #define SECOND 1000000
-//#define STACK_SIZE 16384
 
 typedef unsigned long address_t;
 
@@ -36,15 +35,17 @@ private:
     int id;
     int call;
     int state;
+    char* stack;
     sigjmp_buf env;
-//    char* stack;
     address_t pc;
     address_t sp;
 
 
 
 public:
-    thread(int quantum, int id, address_t foo, address_t stack);
+    thread(int quantum, int id, address_t foo);
+
+    ~thread(){delete[] stack;}
 
     void setState(int state);
 
