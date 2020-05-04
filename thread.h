@@ -15,18 +15,19 @@
 
 #define SECOND 1000000
 
-typedef unsigned long address_t;
-
 #define JB_SP 6
+
 #define JB_PC 7
+
+#define STACK_SIZE 4096 /* stack size per thread (in bytes) */
+
+typedef unsigned long address_t;
 
 const int READY = 1;
 
 const int BLOCK = 2;
 
 const int RUN = 0;
-
-#define STACK_SIZE 4096 /* stack size per thread (in bytes) */
 
 
 class thread {
@@ -39,8 +40,6 @@ private:
     sigjmp_buf env;
     address_t pc;
     address_t sp;
-
-
 
 public:
     thread(int quantum, int id, address_t foo);
@@ -62,7 +61,6 @@ public:
     void inc_calls(){call ++;}
 
     sigjmp_buf *getEnv();
-
 
 };
 

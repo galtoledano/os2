@@ -8,7 +8,6 @@
 #ifdef __x86_64__
 /* code for 64 bit Intel arch */
 
-typedef unsigned long address_t;
 #define JB_SP 6
 #define JB_PC 7
 
@@ -45,6 +44,9 @@ address_t translate_address(address_t addr)
 
 #endif
 
+/*
+ * constractor for thread element, creating new thread including stack for the thread.
+ */
 thread::thread(int quantum, int id, address_t foo) : quantum(quantum), id(id),
             pc(foo), call(0), state(READY){
     char* stack_ = new char[STACK_SIZE];
@@ -59,31 +61,54 @@ thread::thread(int quantum, int id, address_t foo) : quantum(quantum), id(id),
 
 }
 
+/*
+ * return the thread's envelope
+ */
 sigjmp_buf *thread::getEnv(){
     return &env;
 }
 
+/*
+ * return the current thread's quantum
+ */
 int thread::getQuantum() const {
     return quantum;
 }
 
+/*
+ * return the current thread's amount of calling
+ */
+int thread::getCall() const {
+    return call;
+}
+
+/*
+ * return the thread's id
+ */
 int thread::getId() const {
     return id;
 }
 
+/*
+ * return the current thread's state
+ */
 int thread::getState() const {
     return state;
 }
 
+/*
+ * set new state for the thread
+ */
 void thread::setState(int state) {
     thread::state = state;
 }
 
+/*
+ * set new number of quantum for the thread
+ */
 void thread::setQuantum(int quantum) {
     thread::quantum = quantum;
 }
 
-int thread::getCall() const {
-    return call;
-}
+
 

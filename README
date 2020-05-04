@@ -1,0 +1,33 @@
+galtoledano, yahel.yed
+Gal Toledano (204631295), Yahel Yedidya (204365357)
+EX: 2
+
+FILES:
+thread.h - the thread class header.
+thread.cpp - a thread object class.
+uthreads.cpp - implementation of the uthreads static library.
+
+REMARKS:
+-
+
+ANSWERS:
+
+1. One general use that user level threads will be prefered in is an application that switches
+between threads often. We have learned that using user-level threads has a few advantages like
+switching between threads is cheaper - from the OS point of view there is just one thread, while we
+can "split" it to few and save overhaed cost. another advantage is no need to worry about concurrent
+access to data structures, and scheduling can be application-specific.
+
+2. An advantage of using new processes instead of kernel threads: due to the intervension of the OS,
+processes are protected from each other, unlike kernel threads. Disadvantages of using new processes
+instead of kernel threads: processes need the intervension of the operating system in order to
+communicate, while kernel threads don't. In addition, processes have a higher overhead than kernel threads.
+
+3. First, the shell's kill command invokes the kill() system call that trigger send of signals to
+the process referenced by its PID (SIGTERM by default or SIGKILL). The different between those signal
+is that SIGKILL can't be caught by and handler, but SIGTERM can be caught and be managed by a signal
+handler. Also, we get interrupts from the keyboard when we write the command in the shell.
+
+4. Real timing is deterministic and time sensitive, has a flat memory model but it can’t use virtual
+memory. While virtual timing is Non-deterministic and time insensitive, has a protected memory model
+and can use the virtual memory concept.

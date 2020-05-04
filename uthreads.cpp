@@ -14,19 +14,23 @@
 
 typedef unsigned long address_t;
 struct sigaction sa;
+struct itimerval timer;
 sigset_t sigSet;
+
+/* counters */
 static int threads_counter = 0;
 static int total_quant = 0;
 int current_thread = 0;
-std::deque<int> tready;
+
+/*data structures for the library*/
 int* quantums_list;
-std::vector<thread*> threads (MAX_THREAD_NUM);
-struct itimerval timer;
 int list_size;
+std::deque<int> tready;
+std::vector<thread*> threads (MAX_THREAD_NUM);
 
-// stack size for not lozers = 4096
-
-
+/*
+ * block or unblock signals
+ */
 bool handle_signals(int state){
     if(sigprocmask(state, &sigSet, NULL) == -1){
         std::cerr << "System error : failed at blocking signals"<< std::endl;
@@ -35,6 +39,9 @@ bool handle_signals(int state){
     return true;
 }
 
+/*
+ * promoting the first thread at the queue to be the running thread.
+ */
 void ready_to_run(){
     current_thread = tready.front();
     tready.pop_front();
@@ -42,7 +49,9 @@ void ready_to_run(){
     threads[current_thread]->inc_calls();
 }
 
-
+/*
+ * reset the timer according to the given quantom
+ */
 int reset_time(int quant){
     timer.it_value.tv_sec = quant / SECOND;
     timer.it_value.tv_usec = quant % SECOND;
@@ -55,8 +64,13 @@ int reset_time(int quant){
     return 0;
 }
 
+/*
+ * the round robin algorithm function
+ */
 void round_robin(bool is_block = false){
     if(!handle_signals(SIG_BLOCK)){return;}
+
+    // the tready queue is empty
     if(tready.empty()){
         threads[current_thread]->inc_calls();
         reset_time(threads.at(current_thread)->getQuantum());
@@ -64,6 +78,7 @@ void round_robin(bool is_block = false){
         handle_signals(SIG_UNBLOCK);
         return;
     }
+    // handle with terminated thread
     else if(threads.at(current_thread) == nullptr){
         ready_to_run();
     }
@@ -89,12 +104,18 @@ void round_robin(bool is_block = false){
     return;
 }
 
+/*
+ * the time handler, run at the end of the timer.
+ */
 void time_handler(int sig){
     if(sig == SIGVTALRM || sig == 0){
         round_robin();
     }
 }
 
+/*
+ * init the program's signals.
+ */
 void init_signals(){
     sa.sa_handler = &time_handler;
     sa.sa_flags = 0;
@@ -117,6 +138,15 @@ void init_signals(){
     }
 }
 
+/*
+ * Description: This function initializes the thread library.
+ * You may assume that this function is called before any other thread library
+ * function, and that it is called exactly once. The input to the function is
+ * an array of the length of a quantum in micro-seconds for each priority.
+ * It is an error to call this function with an array containing non-positive integer.
+ * size - is the size of the array.
+ * Return value: On success, return 0. On failure, return -1.
+*/
 int uthread_init(int *quantum_usecs, int size){
     if(size <= 0)
     {
@@ -241,7 +271,6 @@ int uthread_terminate(int tid){
             tready.erase(tready.begin(), tready.end());
         }
         sigemptyset(&sigSet);
-//        delete[] quantums_list;
         quantums_list = nullptr;
         if(!handle_signals(SIG_UNBLOCK)){return -1;}
         exit(0);
